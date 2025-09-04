@@ -1,2 +1,13 @@
 # Python version
 python>=3.12.0
+
+# Libraries used in Strategy.ipynb
+pandas
+numpy
+matplotlib
+seaborn
+scikit-learn
+xgboost
+lightgbm
+shap
+FiinQuantX
