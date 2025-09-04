@@ -1,3 +1,5 @@
 # Ignore tất cả file CSV
 *.csv
 *.CSV
+*.csv
+!*.sample.csv
