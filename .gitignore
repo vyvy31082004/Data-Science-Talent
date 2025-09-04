@@ -3,3 +3,4 @@
 *.CSV
 *.csv
 !*.sample.csv
+.env
