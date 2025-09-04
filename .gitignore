@@ -1,0 +1,3 @@
+# Ignore tất cả file CSV
+*.csv
+*.CSV
