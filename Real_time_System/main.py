@@ -59,7 +59,6 @@ def on_event(data: RealTimeData):
 def main():
     signal_logger.info("--- Bắt đầu hệ thống cảnh báo Real-time ---")
     
-    # 1. Đăng nhập
     client = None
     try:
         client = FiinSession(username=config.FIINQUANT_USERNAME, password=config.FIINQUANT_PASSWORD).login()
@@ -68,7 +67,6 @@ def main():
         signal_logger.error(f"Đăng nhập FiinQuantX thất bại: {e}")
         return
 
-    # 2. Bắt đầu stream dữ liệu
     ticker_events = None
     try:
         tickers_to_stream = config.TICKERS_WATCHLIST
