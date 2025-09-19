@@ -1,0 +1,15 @@
+[theme]
+# Màu nhấn chính cho các widget (ví dụ: slider)
+primaryColor="#E63946"
+
+# Màu nền cho khu vực nội dung chính
+backgroundColor="#FFF5F7"
+
+# Màu nền cho các widget như st.expander, st.multiselect
+secondaryBackgroundColor="#FFEBF0"
+
+# Màu chữ mặc định trong khu vực nội dung chính
+textColor="#262730"
+
+# Font chữ
+font="sans serif"

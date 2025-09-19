@@ -1,0 +1,7 @@
+pandas
+pandas-ta
+FiinQuantX
+streamlit
+python-dotenv
+requests
+schedule

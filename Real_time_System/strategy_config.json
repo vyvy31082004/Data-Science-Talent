@@ -1,0 +1,15 @@
+{
+    "RSI_PERIOD": 14,
+    "RSI_OVERBOUGHT": 75,
+    "RSI_OVERSOLD": 25,
+    "SMA_SHORT_PERIOD": 20,
+    "SMA_LONG_PERIOD": 50,
+    "MACD_FAST": 12,
+    "MACD_SLOW": 26,
+    "MACD_SIGNAL": 9,
+    "STOCH_K": 14,
+    "STOCH_D": 3,
+    "STOCH_SMOOTH": 3,
+    "ADX_PERIOD": 14,
+    "ADX_THRESHOLD": 28
+}
