@@ -9,5 +9,7 @@ Cài đặt nhanh:
 pip install -r requirements.txt
 
 ## Hướng dẫn chạy
-1. python main.py để chạy fetch dữ liệu real time
-2. streamlit run app_dashboard.py để chạy streamlit dashboard 
+1. python Real_time_System/main.py để chạy fetch dữ liệu real time
+2. python Real_time_System/scheduler.py để cập nhật các ngưỡng chiến lược
+3. streamlit run Real_time_System/app_dashboard.py để chạy streamlit dashboard 
+
