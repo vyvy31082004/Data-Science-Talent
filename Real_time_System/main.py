@@ -6,7 +6,6 @@ from FiinQuantX import FiinSession, RealTimeData
 
 import config
 from logger_config import signal_logger
-from notifier import send_telegram_message
 from signal_detector import detect_signal
 
 def write_signal_to_csv(timestamp, ticker, signal, price, details):
@@ -49,7 +48,6 @@ def on_event(data: RealTimeData):
                 f" Thời gian: {timestamp}"
             )
             signal_logger.warning(message)
-            send_telegram_message(message)
             write_signal_to_csv(timestamp, ticker, signal, price, details)
             
     except Exception as e:

@@ -10,7 +10,8 @@ logging.basicConfig(level=LOGGING_LEVEL, format='%(asctime)s - %(levelname)s - %
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'strategy_config.json')
 STATUS_FILE_PATH = os.path.join(os.path.dirname(__file__), 'system_status.json') # File mới để ghi trạng thái
-MARKET_PROXY_TICKER = 'FPT' # Tạm dùng FPT làm mã đại diện cho thị trường
+MARKET_PROXY_TICKERS = ['VNINDEX', 'HNXINDEX', 'UPCOMINDEX'] # Phân tích cả 3 sàn chính
+
 ATR_PERIOD = 14
 ATR_AVG_PERIOD = 100 # So sánh ATR hiện tại với trung bình 100 ngày
 
@@ -31,45 +32,60 @@ DYNAMIC_THRESHOLDS = {
 
 def get_market_volatility_state():
     """
-    Phân tích dữ liệu lịch sử để xác định trạng thái biến động của thị trường.
-    
-    Returns:
-        str: "HIGH_VOLATILITY" hoặc "LOW_VOLATILITY", hoặc None nếu có lỗi.
+    Phân tích trạng thái biến động của thị trường dựa trên đa số các chỉ số chính.
     """
-    logging.info(f"Bắt đầu phân tích trạng thái biến động thị trường (dùng mã {MARKET_PROXY_TICKER})...")
+    logging.info(f"Bắt đầu phân tích trạng thái biến động thị trường từ các chỉ số: {MARKET_PROXY_TICKERS}...")
     
-    # Lấy dữ liệu lịch sử đủ dài để tính toán trung bình - Tăng lên để đảm bảo đủ dữ liệu cho rolling average
-    df = fetch_historical_data(MARKET_PROXY_TICKER, days_back=250)
+    volatility_states = []
     
-    if df is None or df.empty:
-        logging.error("Không thể lấy dữ liệu thị trường, không thể xác định trạng thái.")
-        return None
+    for ticker in MARKET_PROXY_TICKERS:
+        logging.info(f"--- Đang phân tích chỉ số: {ticker} ---")
+        df = fetch_historical_data(ticker, days_back=250)
+
+        if df is None or df.empty:
+            logging.error(f"Không thể lấy dữ liệu cho chỉ số {ticker}. Bỏ qua...")
+            continue
+
+        df.ta.atr(length=ATR_PERIOD, append=True)
+        atr_col = f'ATRr_{ATR_PERIOD}'
+        atr_avg_col = f'ATR_AVG_{ATR_AVG_PERIOD}'
+        df[atr_avg_col] = df[atr_col].rolling(window=ATR_AVG_PERIOD).mean()
         
-    # Tính toán ATR và đường trung bình của ATR
-    df.ta.atr(length=ATR_PERIOD, append=True)
-    atr_col = f'ATRr_{ATR_PERIOD}'
-    atr_avg_col = f'ATR_AVG_{ATR_AVG_PERIOD}'
-    df[atr_avg_col] = df[atr_col].rolling(window=ATR_AVG_PERIOD).mean()
-    
-    # Bỏ qua các giá trị NaN ban đầu để đảm bảo tính toán chính xác
-    df.dropna(subset=[atr_col, atr_avg_col], inplace=True)
-    if df.empty:
-        logging.error("Không đủ dữ liệu để tính toán ATR trung bình sau khi loại bỏ NaN.")
+        df.dropna(subset=[atr_col, atr_avg_col], inplace=True)
+        if df.empty:
+            logging.error(f"Không đủ dữ liệu để tính toán ATR trung bình cho {ticker}.")
+            continue
+
+        last_atr = df[atr_col].iloc[-1]
+        last_avg_atr = df[atr_avg_col].iloc[-1]
+
+        logging.info(f"[{ticker}] ATR hiện tại: {last_atr:.2f}, Trung bình ATR {ATR_AVG_PERIOD} ngày: {last_avg_atr:.2f}")
+
+        if last_atr > last_avg_atr:
+            logging.warning(f"[{ticker}] Trạng thái: BIẾN ĐỘNG CAO (HIGH_VOLATILITY)")
+            volatility_states.append("HIGH_VOLATILITY")
+        else:
+            logging.info(f"[{ticker}] Trạng thái: BIẾN ĐỘNG THẤP (LOW_VOLATILITY)")
+            volatility_states.append("LOW_VOLATILITY")
+
+    if not volatility_states:
+        logging.error("Không phân tích được trạng thái của bất kỳ chỉ số nào. Sẽ giữ nguyên cấu hình hiện tại.")
         return None
 
-    # Lấy giá trị gần nhất
-    last_atr = df[atr_col].iloc[-1]
-    last_avg_atr = df[atr_avg_col].iloc[-1]
-    
-    logging.info(f"ATR hiện tại: {last_atr:.2f}, Trung bình ATR {ATR_AVG_PERIOD} ngày: {last_avg_atr:.2f}")
-    
-    # So sánh và quyết định trạng thái
-    if last_atr > last_avg_atr:
-        logging.warning("Trạng thái thị trường: BIẾN ĐỘNG CAO (HIGH_VOLATILITY)")
-        return "HIGH_VOLATILITY"
+    # Quyết định trạng thái chung dựa trên đa số
+    high_vol_count = volatility_states.count("HIGH_VOLATILITY")
+    low_vol_count = volatility_states.count("LOW_VOLATILITY")
+
+    logging.info(f"Tổng kết: {high_vol_count} chỉ số biến động CAO, {low_vol_count} chỉ số biến động THẤP.")
+
+    if high_vol_count > low_vol_count:
+        final_state = "HIGH_VOLATILITY"
+        logging.warning(f"==> KẾT LUẬN: Thị trường chung đang BIẾN ĐỘNG CAO.")
     else:
-        logging.info("Trạng thái thị trường: BIẾN ĐỘNG THẤP (LOW_VOLATILITY)")
-        return "LOW_VOLATILITY"
+        final_state = "LOW_VOLATILITY"
+        logging.info(f"==> KẾT LUẬN: Thị trường chung đang BIẾN ĐỘNG THẤP.")
+        
+    return final_state
 
 def update_strategy_config(market_state: str):
     """

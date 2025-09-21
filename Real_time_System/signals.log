@@ -608,3 +608,9 @@
 2025-09-19 14:00:19 - SignalLogger - INFO - Nhận data: VND, Giá: 22750.0, Thời gian: N/A
 2025-09-19 14:00:19 - SignalLogger - INFO - Nhận data: VND, Giá: 22750.0, Thời gian: N/A
 2025-09-19 14:00:19 - SignalLogger - INFO - Nhận data: VND, Giá: 22750.0, Thời gian: N/A
+2025-09-21 11:28:58 - SignalLogger - INFO - --- Bắt đầu hệ thống cảnh báo Real-time ---
+2025-09-21 11:28:59 - SignalLogger - INFO - Đăng nhập FiinQuantX thành công.
+2025-09-21 11:28:59 - SignalLogger - INFO - Sẽ stream dữ liệu cho 10 mã: ['FPT', 'MWG', 'VCB', 'ACB', 'HPG', 'SSI', 'VND', 'VNM', 'VIC', 'MSN']
+2025-09-21 11:28:59 - SignalLogger - INFO - Bắt đầu lắng nghe luồng dữ liệu. Nhấn Ctrl+C để dừng.
+2025-09-21 11:29:04 - SignalLogger - INFO - Nhận tín hiệu dừng từ bàn phím (Ctrl+C).
+2025-09-21 11:29:04 - SignalLogger - INFO - --- Hệ thống cảnh báo đã dừng ---
