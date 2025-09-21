@@ -8,11 +8,32 @@ import pandas as pd
 import pandas_ta as ta
 
 from historical_data_fetcher import fetch_historical_data
+from ml_brain import DYNAMIC_THRESHOLDS, ATR_AVG_PERIOD, ATR_PERIOD
 import logging
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 logging.getLogger("requests").setLevel(logging.WARNING)
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'strategy_config.json')
+MARKET_PROXY_TICKER = 'VNINDEX' # Sử dụng VNINDEX làm đại diện cho trạng thái thị trường
+
+
+def get_historical_market_state(market_df: pd.DataFrame) -> pd.Series:
+    """
+    Phân tích và trả về một Series chứa trạng thái biến động của thị trường ('LOW_VOLATILITY' hoặc 'HIGH_VOLATILITY')
+    cho mỗi ngày trong DataFrame đầu vào.
+    """
+    df = market_df.copy()
+    df.ta.atr(length=ATR_PERIOD, append=True)
+    atr_col = f'ATRr_{ATR_PERIOD}'
+    atr_avg_col = f'ATR_AVG_{ATR_AVG_PERIOD}'
+
+    df[atr_avg_col] = df[atr_col].rolling(window=ATR_AVG_PERIOD).mean()
+    df.dropna(subset=[atr_col, atr_avg_col], inplace=True)
+
+    df['market_state'] = 'LOW_VOLATILITY' # Mặc định là biến động thấp
+    df.loc[df[atr_col] > df[atr_avg_col], 'market_state'] = 'HIGH_VOLATILITY'
+    
+    return df['market_state']
 
 
 def load_strategy_config() -> Dict:
@@ -44,8 +65,16 @@ def compute_indicators(price_df: pd.DataFrame, strategy_config: Dict) -> pd.Data
     return df
 
 
-def generate_signals(ind_df: pd.DataFrame, strategy_config: Dict) -> pd.DataFrame:
+def generate_signals(
+    ind_df: pd.DataFrame, strategy_config: Dict, market_states: pd.Series
+) -> pd.DataFrame:
     df = ind_df.copy()
+
+    # Hợp nhất trạng thái thị trường vào dataframe chính để dễ dàng truy cập
+    df = df.join(market_states, how='left')
+    df['market_state'].fillna(method='ffill', inplace=True)
+    # Nếu vẫn còn NaN ở đầu, điền bằng trạng thái mặc định
+    df['market_state'].fillna('LOW_VOLATILITY', inplace=True)
 
     rsi_col = f"RSI_{strategy_config['RSI_PERIOD']}"
     macd_line = f"MACD_{strategy_config['MACD_FAST']}_{strategy_config['MACD_SLOW']}_{strategy_config['MACD_SIGNAL']}"
@@ -64,6 +93,14 @@ def generate_signals(ind_df: pd.DataFrame, strategy_config: Dict) -> pd.DataFram
         last = df.iloc[i]
         prev = df.iloc[i - 1]
 
+        # Lấy ngưỡng động cho ngày hiện tại
+        current_market_state = last['market_state']
+        dynamic_params = DYNAMIC_THRESHOLDS.get(current_market_state, DYNAMIC_THRESHOLDS['LOW_VOLATILITY'])
+        
+        rsi_oversold = dynamic_params['RSI_OVERSOLD']
+        rsi_overbought = dynamic_params['RSI_OVERBOUGHT']
+        adx_threshold = dynamic_params['ADX_THRESHOLD']
+
         # Skip until indicators are available
         if (
             pd.isna(last.get(rsi_col))
@@ -78,12 +115,12 @@ def generate_signals(ind_df: pd.DataFrame, strategy_config: Dict) -> pd.DataFram
             continue
 
         # Momentum conditions
-        is_momentum_buy = (last[rsi_col] < strategy_config['RSI_OVERSOLD']) or (
+        is_momentum_buy = (last[rsi_col] < rsi_oversold) or (
             (last[stoch_k] > last[stoch_d])
             and (prev[stoch_k] <= prev[stoch_d])
             and (last[stoch_k] < 20)
         )
-        is_momentum_sell = (last[rsi_col] > strategy_config['RSI_OVERBOUGHT']) or (
+        is_momentum_sell = (last[rsi_col] > rsi_overbought) or (
             (last[stoch_k] < last[stoch_d])
             and (prev[stoch_k] >= prev[stoch_d])
             and (last[stoch_k] > 80)
@@ -106,13 +143,13 @@ def generate_signals(ind_df: pd.DataFrame, strategy_config: Dict) -> pd.DataFram
             (last[macd_line] > 0)
             and (last['close'] > last[sma20])
             and (last['close'] > last[sma50])
-            and (last[adx] > strategy_config['ADX_THRESHOLD'])
+            and (last[adx] > adx_threshold)
         )
         is_trend_still_strong_down = (
             (last[macd_line] < 0)
             and (last['close'] < last[sma20])
             and (last['close'] < last[sma50])
-            and (last[adx] > strategy_config['ADX_THRESHOLD'])
+            and (last[adx] > adx_threshold)
         )
 
         # Signals
@@ -126,12 +163,12 @@ def generate_signals(ind_df: pd.DataFrame, strategy_config: Dict) -> pd.DataFram
             df.iat[i, df.columns.get_loc('signal_reason')] = 'Momentum và Trend xác nhận bán'
             continue
 
-        if (last[rsi_col] > strategy_config['RSI_OVERBOUGHT']) and is_trend_still_strong_up:
+        if (last[rsi_col] > rsi_overbought) and is_trend_still_strong_up:
             df.iat[i, df.columns.get_loc('signal')] = 'Cảnh báo rủi ro (dễ điều chỉnh)'
             df.iat[i, df.columns.get_loc('signal_reason')] = 'RSI quá mua nhưng xu hướng vẫn mạnh'
             continue
 
-        if (last[rsi_col] < strategy_config['RSI_OVERSOLD']) and is_trend_still_strong_down:
+        if (last[rsi_col] < rsi_oversold) and is_trend_still_strong_down:
             df.iat[i, df.columns.get_loc('signal')] = 'Cảnh báo rủi ro (bắt đáy nguy hiểm)'
             df.iat[i, df.columns.get_loc('signal_reason')] = 'RSI quá bán nhưng xu hướng giảm vẫn mạnh'
             continue
@@ -245,9 +282,17 @@ def backtest_ticker(
     if raw_df.empty:
         raise RuntimeError(f"Khoảng thời gian không có dữ liệu cho {ticker}")
 
+    # Lấy dữ liệu thị trường để xác định trạng thái biến động
+    market_df = fetch_historical_data(MARKET_PROXY_TICKER, days_back=days_back)
+    if market_df is None or market_df.empty:
+        raise RuntimeError(f"Không lấy được dữ liệu thị trường cho {MARKET_PROXY_TICKER}")
+    
+    market_df = slice_date_range(market_df, start, end)
+    market_states = get_historical_market_state(market_df)
+
     strategy_config = load_strategy_config()
     ind_df = compute_indicators(raw_df, strategy_config)
-    sig_df = generate_signals(ind_df, strategy_config)
+    sig_df = generate_signals(ind_df, strategy_config, market_states)
 
     trades_df, equity_df, metrics = simulate_trades(sig_df, fee_bps_per_side=fee_bps)
     return trades_df, equity_df, metrics, sig_df
