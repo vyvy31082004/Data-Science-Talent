@@ -1,6 +1,3 @@
-# Python version
-python>=3.12.0
-
 # Libraries used in Strategy.ipynb
 pandas
 numpy
@@ -11,3 +8,8 @@ xgboost
 lightgbm
 shap
 FiinQuantX
+pandas-ta
+streamlit
+python-dotenv
+requests
+schedule
